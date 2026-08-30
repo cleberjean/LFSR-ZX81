@@ -1,5 +1,5 @@
 # LFSR-ZX81
-LFSR Screen Effect for Sinclair ZX81 Microcomputer
+LFSR Screen Effect for the Sinclair ZX81 Microcomputer.
 
 Source code to be compiled with the **Telemark Assembler** (TASM).
 
