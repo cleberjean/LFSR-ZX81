@@ -1,2 +1,2 @@
 # LFSR-ZX81
-LFSR Screen Effect to Sinclair ZX81 Microcomputer
+LFSR Screen Effect for Sinclair ZX81 Microcomputer
