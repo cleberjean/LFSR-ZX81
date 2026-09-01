@@ -1,7 +1,9 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 2 (30ago2026)
+;; Galois LFSR Screen Filling Version 2 (01sep2026)
 ;;
-;; Address 16507 (40FBh) signals the action (1 = Plot or 0 = Unplot)
+;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
+;; Poking 128 (80h), executes a Pause of 120 frames.
+;;
 ;; To press the space key to abort the generation.
 ;;
 ;; To mount with the TELEMARK Cross-assembler. (NOT IS THE BORLAND TASM)
@@ -42,7 +44,7 @@
     dw 5           ;S_TOP    ;First line to show after the List command
     db $FF,$FF     ;LAST_K   ;(4025h)
     db $FF         ;DEBOUN
-    db 55          ;MARGIN 
+    db 55          ;MARGIN   ;55 for NTSC vertical frequency (60 Hz) 
     dw Line_10     ;NXTLIN   ;auto-start line after of LOAD (DFile=no auto-start)
     dw 0           ;OLDPPC 
     db 0           ;FLAGX 
@@ -80,12 +82,39 @@ REM_Line:
  
 ;--------------------- Beginning of Assembly Program Code ---------------------
 
-Start:
-    bit  7,(iy + 3Bh)        ; Checks FAST mode
-    call z,0F2Bh             ; Call SLOW mode if in FAST
+Code_Start:
+    bit  7,(iy + $3B)        ; Checks FAST mode
+    call z,$0F2B             ; Call SLOW mode if in FAST
 
 
-; Sorteia o indice inicial da tabela de pontos
+;------------------------------------------------------------------------------
+; Checks if the Pause by 120 Frames Flag (16417 address value bit 7) is On
+;------------------------------------------------------------------------------
+    ld   a,(16417)
+    and  $80                 ; Is pause 120 frames flag (bit 7) on?
+    jr   z,Effect_Start      ; Then to wait 120 frames and exit
+
+
+;------------------------------------------------------------------------------
+; Pause of 120 Frames (~2 seconds)
+;------------------------------------------------------------------------------
+    ld   a,($4028)           ; MARGIN var
+    sub  $37
+    sbc  a,a
+    or   $F5                 ; Acumullator = 255 if 60Hz or 245 if 50Hz
+    ld   ($4034),a           ; initializes the Frames Counter (with 255 or 245)
+
+Pause_120_Loop:
+    ld   a,($4034)
+    cp   255 - 120           ; Past ~2 seconds? (100/120 frames)
+    jr   nc,Pause_120_Loop   ; Not yet
+    ret
+
+
+;------------------------------------------------------------------------------
+; Beggining of LFSR Effect Code
+;------------------------------------------------------------------------------
+Effect_Start:    
     call Get_Initial_Seed
 
 Plotting_Loop:
@@ -93,13 +122,18 @@ Plotting_Loop:
     call Plot_Routine        ; Plots the dot
     call Gen_LFSR            ; Prepares the next LFSR value
 
-    ; Checks Keyboard
-    ld   a,(4025h)           ; Gets the scancode of the last pressed key
-    inc  a                   ; Checks if any key was pressed
+    ; Checks Keyboard for Space Key (Break) press
+    ld   hl,($4025)          ; Gets the scancode of the last pressed key
+    ld   a,h                 ; Checks if any key was pressed
+    cp   $FF
+    jr   z,Check_End
+    ld   a,l
+    cp   $FF 
     ld   bc,1                ; Error code to return, case interromped by user
     ret  nz                  ; A key was pressed
 
     ; All Dots Plotted?
+Check_End:    
     ld   hl,(LFSR_Seed)
     ld   de,(Initial_Seed)
     ld   a,h
@@ -110,11 +144,30 @@ Plotting_Loop:
     jr   nz,Plotting_Loop
     
 ;    ld   bc,0                ; Success error code (0)
-    dec   bc                 ; Success error code (0)
+    dec  bc                  ; Success error code (0)
     ret                      ; Backs to BASIC
 
 
 ;------------------------------------------------------------------------------
+; Initial Seed to LFSR Generator
+;------------------------------------------------------------------------------
+Get_Initial_Seed:
+    ld   a,r
+    ld   l,a
+    cpl
+    and  $0B
+    ld   h,a                 ; Loads H with an inverted value (Avoid a Seed = 0)
+    ld   (LFSR_Seed),hl      ;
+    ld   (Initial_Seed),hl   ; To check if all screen is ploted or unploted
+    ret
+
+
+;------------------------------------------------------------------------------
+; Turn the LFSR Value into a Column (X) and Row (Y) Coordinate
+; ------------------------------------------------------------
+;
+; Input :
+;         None.
 ;
 ; Output:
 ;         B = Y coordinate (row)
@@ -128,15 +181,15 @@ Get_XY:
     dec  hl                  ; Adjusts to a range 0-3071
                              ; (LFSR Seed range is 1 up to 3072)
 
-    ; Extracts the Coordinate X (Bits 0 to 5 from L) in C register
+    ; Extracts the Coordinate X (Bits 0 to 5 from L) to the C register
     ld   a,l
-    and  3Fh                 ; Isola os 6 bits inferiores
+    and  $3F                 ; Get only the lower 6 bits
     ld   c,a                 ; C = Coordinate X (column from 0 to 63)
 
-    ; Gets Coordinate Y in B register
-    add   hl,hl
-    add   hl,hl
-    ld    b,h
+    ; Put the Coordinate Y in B register
+    add  hl,hl
+    add  hl,hl
+    ld   b,h
     ret
 
 
@@ -165,11 +218,11 @@ Plot_Routine:
     ; Checks if Char in Plot/Unplot address is graphic
     ld   a,(hl)
     rlca
-    cp   10h
+    cp   $10
     jr   nc,$+8
     rrca
     jr   nc,$+4
-    xor  8Fh
+    xor  $8F
     ld   b,a
 
     ; Checks Action (Plot/Unplot?)
@@ -191,7 +244,7 @@ Plot:
     or   b                   ; combina com caractere do endereco
     cp   8
     jr   c,$+4               ; imprime
-    xor  8Fh
+    xor  $8F
 
     ld   (hl),a              ; imprime o Plot/Unplot
     ret                      ; fim
@@ -224,27 +277,15 @@ Calc_Plot_Address:
     add  hl,hl               ; line * 32
     add  hl,de               ; line * 33
     ex   de,hl
-    ld   hl,(400Ch)          ; D-File
+    ld   hl,($400C)          ; Gets D-File address
     inc  hl                  ; Skips the 1st NEWLINE (CHR$ 118)
     add  hl,de
     ret                      ; Returns with HL = printing address
 
 
 ;------------------------------------------------------------------------------
-; Initial Seed to LFSR Generator
-;------------------------------------------------------------------------------
-Get_Initial_Seed:
-    ld   a,r
-    ld   l,a
-    cpl
-    and  0Bh
-    ld   h,a                 ; Loads H with an inverted value (Avoid a Seed = 0)
-    ld   (LFSR_Seed),hl      ;
-    ld   (Initial_Seed),hl   ; To check if all screen is ploted or unploted
-    ret
-
-
-;------------------------------------------------------------------------------
+; LFSR Galois Generator with a Period of 1 to 3072
+; ------------------------------------------------
 ; Input  : None.
 ; Output : HL = New valid LFSR.
 ;------------------------------------------------------------------------------
@@ -252,16 +293,16 @@ Gen_LFSR:
     ld    hl,(LFSR_Seed)     ; Gets the last LFSR value (Stored in the ZX81
                              ; System SEED variable)
 New_LFSR:
-    srl   h                  ; Desloca H para a direita, bit 8 vai para o Carry
-    rr    l                  ; Desloca L para a direita, bit 0 vai para o Carry
+    srl   h
+    rr    l
     jr    nc,Skip_XOR
 
-    ; Aplica o Tap de 12 bits CORRIGIDO (Periodo Maximo = 4095 estados)
+    ; Apply Tap of 12 bits (Maximum Period = 4095 states)
     ld    a,h
-    xor   08h                ; Realimenta o bit 11 (MSB do bloco de 12 bits)
+    xor   $08
     ld    h,a
     ld    a,l
-    xor   29h                ; <--- Trocado de 0x58 para 0x29 (Ajuste fino de Galois)
+    xor   $29
     ld    l,a
 
 Skip_XOR:
@@ -271,14 +312,14 @@ Skip_XOR:
     dec  hl                  ; Decrements HL temporarily for boundary test
     ld   a,h                 ; Loads A with the adjusted boundary for test
     inc  hl                  ; Restores original HL value
-    cp   0Ch                 ; Tests adjusted boundary (3072)
+    cp   $0C                 ; Tests adjusted boundary (3072)
     jr   nc,New_LFSR         ; LFSR Seed > 3072 (generate a new value)
     ld   (LFSR_Seed),hl      ; Saves the new valid LFSR value...
     ret                      ; ...and exit
 
 ;------------------------ End of Assembly Program Code ------------------------
     
-    db   $76                 ; New Line code (end of the REM line) 
+    db   $76                 ; NEWLINE code (end of the REM line) 
 
 ;------------------------------------------------------------------------------
 ; Marks the End of REM Line (used to calculate the size of the REM line)
@@ -290,43 +331,43 @@ REM_Line_End:
 
 ;================================ BASIC Code ==================================
 
-; Line 5 REM =======================
+; 5 REM =======================
     db  00h,05h,19h,00h,0EAh,14h,14h,14h
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,76h
 
-; Line 6 REM GALOIS LFSR GENERATION
+; 6 REM GALOIS LFSR GENERATION
     db  00h,06h,18h,00h,0EAh,2Ch,26h,31h
     db  34h,2Eh,38h,00h,31h,2Bh,38h,37h
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; Line 7 REM IN 29/AUG/2026 BY CJB
+; 7 REM IN 31/AUG/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Fh,1Ch,18h,26h,3Ah,2Ch,18h,1Eh
+    db  1Ch,1Dh,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
-; Line 8 REM ========================
+; 8 REM ========================
     db  00h,08h,19h,00h,0EAh,14h,14h,14h
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,76h
 
-; Line 10 POKE 16417,1 (Execution start)
+; 10 POKE 16417,1            (To Plot. Execution Starts Here)
 Line_10:
     db  00h,0Ah,15h,00h,0F4h,1Dh,22h,20h
     db  1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
     db  1Ah,1Dh,7Eh,81h,00h,00h,00h,00h
     db  76h
 
-; Line 20 RAND USR 16514
+; 20 RAND USR 16514
     db  00h,14h,0Eh,00h,0F9h,0D4h,1Dh,22h
     db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
     db  00h,76h
 
-;Line 30 PRINT AT 10,7; "THE SCREEN IS FULL"
+; 30 PRINT AT 10,7; "THE SCREEN IS FULL"
     db  00h,1Eh,28h,00h,0F5h,0C1h,1Dh,1Ch
     db  7Eh,84h,20h,00h,00h,00h,1Ah,23h
     db  7Eh,83h,60h,00h,00h,00h,19h,0Bh
@@ -334,22 +375,27 @@ Line_10:
     db  0AAh,0B3h,80h,0AEh,0B8h,80h,0ABh,0BAh
     db  0B1h,0B1h,0Bh,76h
 
-; Line 40 PAUSE 200
-    db  00h,28h,0Bh,00h,0F2h,1Eh,1Ch,1Ch
-    db  7Eh,88h,48h,00h,00h,00h,76h
-
-; Line 50 POKE 16417,0
-    db  00h,32h,15h,00h,0F4h,1Dh,22h,20h
-    db  1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
-    db  1Ah,1Ch,7Eh,00h,00h,00h,00h,00h
+; 40 FOR P=0 TO 100          (Pause Between Screens)
+    db  00h,28h,15h,00h,0EBh,35h,14h,1Ch
+    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
+    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
     db  76h
 
-; Line 60 RAND USR 16514
+; 45 NEXP P   
+    db  00h,2Dh,03h,00h,0F3h,35h,76h
+
+; 50 POKE 16417,0            (To Unplot)
+    db   00h,32h,15h,00h,0F4h,1Dh,22h,20h
+    db   1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
+    db   1Ah,1Ch,7Eh,00h,00h,00h,00h,00h
+    db   76h
+
+; 60 RAND USR 16514
     db  00h,3Ch,0Eh,00h,0F9h,0D4h,1Dh,22h
     db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
     db  00h,76h
 
-; Line 70 PRINT AT 10,6; "THE SCREEN IS CLEAN"
+; 70 PRINT AT 10,6; "THE SCREEN IS CLEAN"
     db  00h,46h,29h,00h,0F5h,0C1h,1Dh,1Ch
     db  7Eh,84h,20h,00h,00h,00h,1Ah,22h
     db  7Eh,83h,40h,00h,00h,00h,19h,0Bh
@@ -357,11 +403,16 @@ Line_10:
     db  2Ah,33h,00h,2Eh,38h,00h,28h,31h
     db  2Ah,26h,33h,0Bh,76h
 
-; Line 80 PAUSE 200
-    db  00h,50h,0Bh,00h,0F2h,1Eh,1Ch,1Ch
-    db  7Eh,88h,48h,00h,00h,00h,76h
+; 80 FOR P=0 TO 100          (Pause Between Screens)   
+    db  00h,50h,15h,00h,0EBh,35h,14h,1Ch
+    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
+    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
+    db  76h
 
-; Line 90 GOTO 10
+; 85 NEXP P   
+    db  00h,55h,03h,00h,0F3h,35h,76h
+
+; 90 GOTO 10                 (Again)
     db  00h,5Ah,0Ah,00h,0ECh,1Dh,1Ch,7Eh
     db  84h,20h,00h,00h,00h,76h
 
