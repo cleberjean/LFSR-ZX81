@@ -1,5 +1,5 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 2 (01sep2026)
+;; Galois LFSR Screen Filling Version 2 (02sep2026)
 ;;
 ;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
 ;; Poking 128 (80h), executes a Pause of 120 frames.
@@ -44,7 +44,7 @@
     dw 5           ;S_TOP    ;First line to show after the List command
     db $FF,$FF     ;LAST_K   ;(4025h)
     db $FF         ;DEBOUN
-    db 55          ;MARGIN   ;55 for NTSC vertical frequency (60 Hz) 
+    db 55          ;MARGIN   ;37 for 50 Hz (PAL) or 55 for 60 Hz (NTSC) 
     dw Line_10     ;NXTLIN   ;auto-start line after of LOAD (DFile=no auto-start)
     dw 0           ;OLDPPC 
     db 0           ;FLAGX 
@@ -88,26 +88,28 @@ Code_Start:
 
 
 ;------------------------------------------------------------------------------
-; Checks if the Pause by 120 Frames Flag (16417 address value bit 7) is On
+; Checks if the 3 Seconds Pause Flag (16417 address value bit 7) is On
 ;------------------------------------------------------------------------------
     ld   a,(16417)
-    and  $80                 ; Is pause 120 frames flag (bit 7) on?
-    jr   z,Effect_Start      ; Then to wait 120 frames and exit
+    and  $80                 ; Is 3 seconds pause flag (bit 7) on?
+    jr   z,Effect_Start      ; Then to wait 3 seconds and exit
 
 
 ;------------------------------------------------------------------------------
-; Pause of 120 Frames (~2 seconds)
+; 3 Seconds Pause (150/180 Frames) (POKE 16417,128)
 ;------------------------------------------------------------------------------
     ld   a,($4028)           ; MARGIN var
-    sub  $37
-    sbc  a,a
-    or   $F5                 ; Acumullator = 255 if 60Hz or 245 if 50Hz
-    ld   ($4034),a           ; initializes the Frames Counter (with 255 or 245)
+    sub  $37                 ; Turns A = 0 if 50 Hz (PAL System)
+    sbc  a,a                 ; Turns A = 255 if 60 Hz (NTSC System)
+    or   $E1                 ; Turns A = 255 if in NTSC or 225 if in PAL
+    ld   ($4034),a           ; initializes the Frames Counter (with 255 or 225)
 
-Pause_120_Loop:
-    ld   a,($4034)
-    cp   255 - 120           ; Past ~2 seconds? (100/120 frames)
-    jr   nc,Pause_120_Loop   ; Not yet
+Pause_180_Loop:
+    call Check_Space         ; Checks the Space key pressing
+    ret  z                   ; The Space key was pressed
+    ld   a,($4034)           ; Gets frames counter
+    cp   255 - 180           ; Past 3 seconds? (150/180 frames)
+    jr   nc,Pause_180_Loop   ; Not yet
     ret
 
 
@@ -122,18 +124,19 @@ Plotting_Loop:
     call Plot_Routine        ; Plots the dot
     call Gen_LFSR            ; Prepares the next LFSR value
 
-    ; Checks Keyboard for Space Key (Break) press
-    ld   hl,($4025)          ; Gets the scancode of the last pressed key
-    ld   a,h                 ; Checks if any key was pressed
-    cp   $FF
-    jr   z,Check_End
-    ld   a,l
-    cp   $FF 
+;    ; Checks the Keyboard for Space Key (Break) Pressing
+;    ld   hl,($4025)          ; Gets the scancode of the last pressed key
+;    ld   a,l                 ; Checks if any key was pressed
+;    cp   $7F                 ; Scancode 1 for Space key
+;    jr   nz,Check_Scn_Full
+;    ld   a,h
+;    cp   $FD                 ; Scancode 2 for Space key (FCh for Shift+Space)
+    call Check_Space         ; Checks the Space key pressing
     ld   bc,1                ; Error code to return, case interromped by user
-    ret  nz                  ; A key was pressed
+    ret  z                   ; The Space key was pressed
 
     ; All Dots Plotted?
-Check_End:    
+Check_Scn_Full:    
     ld   hl,(LFSR_Seed)
     ld   de,(Initial_Seed)
     ld   a,h
@@ -147,6 +150,20 @@ Check_End:
     dec  bc                  ; Success error code (0)
     ret                      ; Backs to BASIC
 
+
+;------------------------------------------------------------------------------
+; Checks the Space Key (Break) Pressing
+; Returns Z if the Space key was pressed.
+;------------------------------------------------------------------------------
+Check_Space:    
+    ld   hl,($4025)          ; Gets the scancode of the last pressed key
+    ld   a,l                 ; Checks if any key was pressed
+    cp   $7F                 ; Scancode 1 for Space key
+    ret  nz                  ; The Space key is not pressed (Z flag = 0)
+    ld   a,h
+    cp   $FD                 ; Scancode 2 for Space key (FCh for Shift+Space)
+    ret                      ; Returns with the Space key status in Z flag 
+                             ; (Z = 1 = The Space key was pressed)
 
 ;------------------------------------------------------------------------------
 ; Initial Seed to LFSR Generator
@@ -343,9 +360,9 @@ REM_Line_End:
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; 7 REM IN 31/AUG/2026 BY CJB
+; 7 REM IN 02/SEP/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Ch,1Dh,18h,38h,2Ah,35h,18h,1Eh
+    db  1Ch,1Eh,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
@@ -355,7 +372,7 @@ REM_Line_End:
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,76h
 
-; 10 POKE 16417,1            (To Plot. Execution Starts Here)
+; 10 POKE 16417,1            (LFSR Plots. Execution Starts Here)
 Line_10:
     db  00h,0Ah,15h,00h,0F4h,1Dh,22h,20h
     db  1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
@@ -375,16 +392,28 @@ Line_10:
     db  0AAh,0B3h,80h,0AEh,0B8h,80h,0ABh,0BAh
     db  0B1h,0B1h,0Bh,76h
 
-; 40 FOR P=0 TO 100          (Pause Between Screens)
-    db  00h,28h,15h,00h,0EBh,35h,14h,1Ch
-    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
-    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
-    db  76h
+;; 40 FOR P=0 TO 100          (Pause Between Screens)
+;    db  00h,28h,15h,00h,0EBh,35h,14h,1Ch
+;    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
+;    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
+;    db  76h
+;
+;; 45 NEXP P   
+;    db  00h,2Dh,03h,00h,0F3h,35h,76h
+;
 
-; 45 NEXP P   
-    db  00h,2Dh,03h,00h,0F3h,35h,76h
+; 40 POKE 16417,128          (Execute Pause)
+    db  00h,28h,17h,00h,0F4h,1Dh,22h,20h
+    db  1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
+    db  1Ah,1Dh,1Eh,24h,7Eh,88h,00h,00h
+    db  00h,00h,76h
 
-; 50 POKE 16417,0            (To Unplot)
+; 45 RAND USR 16514          (A 3 Seconds Pause Between Screens)
+    db  00h,2Dh,0Eh,00h,0F9h,0D4h,1Dh,22h
+    db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
+    db  00h,76h
+
+; 50 POKE 16417,0            (LFSR Unplots)
     db   00h,32h,15h,00h,0F4h,1Dh,22h,20h
     db   1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
     db   1Ah,1Ch,7Eh,00h,00h,00h,00h,00h
@@ -403,14 +432,25 @@ Line_10:
     db  2Ah,33h,00h,2Eh,38h,00h,28h,31h
     db  2Ah,26h,33h,0Bh,76h
 
-; 80 FOR P=0 TO 100          (Pause Between Screens)   
-    db  00h,50h,15h,00h,0EBh,35h,14h,1Ch
-    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
-    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
-    db  76h
+;; 80 FOR P=0 TO 100          (Pause Between Screens)   
+;    db  00h,50h,15h,00h,0EBh,35h,14h,1Ch
+;    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
+;    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
+;    db  76h
+;
+;; 85 NEXP P   
+;    db  00h,55h,03h,00h,0F3h,35h,76h
 
-; 85 NEXP P   
-    db  00h,55h,03h,00h,0F3h,35h,76h
+; 80 POKE 16417,128          (Execute Pause)
+    db  00h,50h,17h,00h,0F4h,1Dh,22h,20h
+    db  1Dh,23h,7Eh,8Fh,00h,42h,00h,00h
+    db  1Ah,1Dh,1Eh,24h,7Eh,88h,00h,00h
+    db  00h,00h,76h
+
+; 85 RAND USR 16514          (A 3 Seconds Pause Between Screens)
+    db  00h,55h,0Eh,00h,0F9h,0D4h,1Dh,22h
+    db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
+    db  00h,76h
 
 ; 90 GOTO 10                 (Again)
     db  00h,5Ah,0Ah,00h,0ECh,1Dh,1Ch,7Eh
