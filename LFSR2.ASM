@@ -1,5 +1,5 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 2 (02sep2026)
+;; Galois LFSR Screen Filling Version 2 (04sep2026)
 ;;
 ;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
 ;; Poking 128 (80h), executes a Pause of 120 frames.
@@ -360,9 +360,9 @@ REM_Line_End:
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; 7 REM IN 02/SEP/2026 BY CJB
+; 7 REM IN 04/SEP/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Ch,1Eh,18h,38h,2Ah,35h,18h,1Eh
+    db  1Ch,20h,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
@@ -371,6 +371,9 @@ REM_Line_End:
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,14h,14h,14h,14h
     db  14h,14h,14h,14h,76h
+
+; 9 REM
+    db  00h,09h,02h,00h,0EAh,76h
 
 ; 10 POKE 16417,1            (LFSR Plots. Execution Starts Here)
 Line_10:
@@ -455,6 +458,13 @@ Line_10:
 ; 90 GOTO 10                 (Again)
     db  00h,5Ah,0Ah,00h,0ECh,1Dh,1Ch,7Eh
     db  84h,20h,00h,00h,00h,76h
+
+; 100 SAVE "LFSR" 
+    db  00h,64h,08h,00h,0F8h,0Bh,31h,2Bh
+    db  38h,0B7h,0Bh,76h
+
+; 110 RUN
+    db  00h,6Eh,02h,00h,0F7h,76h
 
 ;============================ End of BASIC Code ===============================
 
