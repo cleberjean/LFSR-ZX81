@@ -1,8 +1,8 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 2 (04sep2026)
+;; Galois LFSR Screen Filling Version 2 (05sep2026)
 ;;
 ;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
-;; Poking 128 (80h), executes a Pause of 120 frames.
+;; Poking 128 (80h - bit 7 = 1), executes a Pause of 3 seconds.
 ;;
 ;; To press the space key to abort the generation.
 ;;
@@ -23,7 +23,7 @@
  
     org  $4009 
  
-;   Data           ZX81 System Vars Names
+;   Data            ZX81 System Variables Names
 ;------------------------------------------------------------------------------
     db 0           ;VERSN 
     dw 9999        ;E_PPC    ;line of the [>] cursor
@@ -52,7 +52,7 @@
     dw $0C8D       ;T_ADDR 
 
 LFSR_Seed:
-    dw 3072 / 2    ;SEED     ; LFSR value (3072 / 2 is the center of screen)
+    dw 3072 / 2    ;SEED     ;LFSR value (3072 / 2 is the center of screen)
     dw $FFFF       ;FRAMES 
     db 0,0         ;COORDS   ;coordinates x,y of PLOT/UNPLOT (4021h)
     db $BC         ;PR_CC    ;lsb of the address of printer buffer
@@ -88,10 +88,10 @@ Code_Start:
 
 
 ;------------------------------------------------------------------------------
-; Checks if the 3 Seconds Pause Flag (16417 address value bit 7) is On
+; Checks if the 3 Seconds Pause Flag (16417 address value bit 7) is On (1)
 ;------------------------------------------------------------------------------
     ld   a,(16417)
-    and  $80                 ; Is 3 seconds pause flag (bit 7) on?
+    and  $80                 ; Is 3 seconds Pause Flag (bit 7) on?
     jr   z,Effect_Start      ; Then to wait 3 seconds and exit
 
 
@@ -153,6 +153,8 @@ Check_Scn_Full:
 
 ;------------------------------------------------------------------------------
 ; Checks the Space Key (Break) Pressing
+; -------------------------------------
+;
 ; Returns Z if the Space key was pressed.
 ;------------------------------------------------------------------------------
 Check_Space:    
@@ -212,25 +214,26 @@ Get_XY:
 
 ;------------------------------------------------------------------------------
 ; Plot/Unplot Routine Version 2.2b (checks bit 0 from address 4021h for action)
+; -----------------------------------------------------------------------------
 ;
 ; Input:
 ;        B register = plot/unplot's row (Y)
 ;        C register = plot/unplot's column (X)
 ; Destroys:
-;
+;        BC, DE, HL
 ;------------------------------------------------------------------------------
 Plot_Routine:
     ; Calcula caractere do Plot/Unplot
     ld   a,1
-    sra  b                   ; divide valor da linha do Plot por 2
+    sra  b                   ; Divide the value of Plot row (Y) by 2
     jr   nc,$+4
     ld   a,4
-    sra  c                   ; divide o valor da coluna do Plot por 2
+    sra  c                   ; Divide the value of Plot column (X) by 2
     jr   nc,$+3
     rlca
-    push af                  ; salva o caractere do Plot/Unplot para usar
-                             ; mais tarde
-    call Calc_Plot_Address   ; calcula o endereco do Plot/Unplot no video
+    push af                  ; Saves the char of Plot/Unplot to use later
+    call Calc_Plot_Address   ; Calculate the address of the Plot/Unplot
+                             ; on video
 
     ; Checks if Char in Plot/Unplot address is graphic
     ld   a,(hl)
@@ -250,26 +253,27 @@ Plot_Routine:
     jp   nz,Plot             ; Yes. Let's to plot
 
     ; Unplots
-    pop  af                  ; Restores the unplot character
+    pop  af                  ; Restores the Unplot character
     cpl
-    and  b                   ; combina com caractere do endereco
+    and  b                   ; Combine with the character in address
     jr   $+4
 
 Plot:
     ; Plots
-    pop  af                  ; Restores the plot character
-    or   b                   ; combina com caractere do endereco
+    pop  af                  ; Restores the Plot character
+    or   b                   ; Combine with the character in address
     cp   8
-    jr   c,$+4               ; imprime
+    jr   c,$+4               ; To print the new char
     xor  $8F
 
-    ld   (hl),a              ; imprime o Plot/Unplot
-    ret                      ; fim
+    ld   (hl),a              ; Prints the Plot/Unplot on screen
+    ret
 
 
 
 ;------------------------------------------------------------------------------
-;Calcula o endereco da impressao do Plot/Unplot
+; Gets the Address into D-File Where to Plot or Unplot
+; ----------------------------------------------------
 ;
 ; Input:
 ;        B = Coordinate Y (line) to print (0-23)
@@ -303,6 +307,7 @@ Calc_Plot_Address:
 ;------------------------------------------------------------------------------
 ; LFSR Galois Generator with a Period of 1 to 3072
 ; ------------------------------------------------
+;
 ; Input  : None.
 ; Output : HL = New valid LFSR.
 ;------------------------------------------------------------------------------
@@ -360,9 +365,9 @@ REM_Line_End:
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; 7 REM IN 04/SEP/2026 BY CJB
+; 7 REM IN 05/SEP/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Ch,20h,18h,38h,2Ah,35h,18h,1Eh
+    db  1Ch,21h,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
@@ -395,7 +400,7 @@ Line_10:
     db  0AAh,0B3h,80h,0AEh,0B8h,80h,0ABh,0BAh
     db  0B1h,0B1h,0Bh,76h
 
-;; 40 FOR P=0 TO 100          (Pause Between Screens)
+;; 40 FOR P=0 TO 100          (Pause Between the Effects)
 ;    db  00h,28h,15h,00h,0EBh,35h,14h,1Ch
 ;    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
 ;    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
@@ -411,7 +416,7 @@ Line_10:
     db  1Ah,1Dh,1Eh,24h,7Eh,88h,00h,00h
     db  00h,00h,76h
 
-; 45 RAND USR 16514          (A 3 Seconds Pause Between Screens)
+; 45 RAND USR 16514          (Pause of 3 Seconds Between the Effects)
     db  00h,2Dh,0Eh,00h,0F9h,0D4h,1Dh,22h
     db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
     db  00h,76h
@@ -435,7 +440,7 @@ Line_10:
     db  2Ah,33h,00h,2Eh,38h,00h,28h,31h
     db  2Ah,26h,33h,0Bh,76h
 
-;; 80 FOR P=0 TO 100          (Pause Between Screens)   
+;; 80 FOR P=0 TO 100          (Pause Between the Effects)
 ;    db  00h,50h,15h,00h,0EBh,35h,14h,1Ch
 ;    db  7Eh,00h,00h,00h,00h,00h,0DFh,1Dh
 ;    db  1Ch,1Ch,7Eh,87h,48h,00h,00h,00h
@@ -450,7 +455,7 @@ Line_10:
     db  1Ah,1Dh,1Eh,24h,7Eh,88h,00h,00h
     db  00h,00h,76h
 
-; 85 RAND USR 16514          (A 3 Seconds Pause Between Screens)
+; 85 RAND USR 16514          (Pause of 3 Seconds Between the Effects)
     db  00h,55h,0Eh,00h,0F9h,0D4h,1Dh,22h
     db  21h,1Dh,20h,7Eh,8Fh,01h,04h,00h
     db  00h,76h
@@ -459,9 +464,9 @@ Line_10:
     db  00h,5Ah,0Ah,00h,0ECh,1Dh,1Ch,7Eh
     db  84h,20h,00h,00h,00h,76h
 
-; 100 SAVE "LFSR" 
-    db  00h,64h,08h,00h,0F8h,0Bh,31h,2Bh
-    db  38h,0B7h,0Bh,76h
+; 100 SAVE "LFSR2" 
+    db  00h,64h,09h,00h,0F8h,0Bh,31h,2Bh
+    db  38h,37h,9Eh,0Bh,76h
 
 ; 110 RUN
     db  00h,6Eh,02h,00h,0F7h,76h
