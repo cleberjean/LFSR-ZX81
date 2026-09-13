@@ -1,4 +1,4 @@
-12-bit LFSR Galois XOR Mask (4095 Values)
+12-bit (4095 Values) LFSR Galois XOR Mask
 =========================================
 
 From https://users.ece.cmu.edu/~koopman/lfsr/12.txt (in 12/sep/2026)
