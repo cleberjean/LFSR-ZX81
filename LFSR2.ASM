@@ -1,5 +1,5 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 2 (05sep2026)
+;; Galois LFSR Screen Filling Version 2 (13sep2026)
 ;;
 ;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
 ;; Poking 128 (80h - bit 7 = 1), executes a Pause of 3 seconds.
@@ -91,7 +91,7 @@ Code_Start:
 ; Checks if the 3 Seconds Pause Flag (16417 address value bit 7) is On (1)
 ;------------------------------------------------------------------------------
     ld   a,(16417)
-    and  $80                 ; Is 3 seconds Pause Flag (bit 7) on?
+    bit  7,a                 ; Is 3 seconds Pause Flag on?
     jr   z,Effect_Start      ; Then to wait 3 seconds and exit
 
 
@@ -223,7 +223,6 @@ Get_XY:
 ;        BC, DE, HL
 ;------------------------------------------------------------------------------
 Plot_Routine:
-    ; Calcula caractere do Plot/Unplot
     ld   a,1
     sra  b                   ; Divide the value of Plot row (Y) by 2
     jr   nc,$+4
@@ -270,13 +269,12 @@ Plot:
     ret
 
 
-
 ;------------------------------------------------------------------------------
 ; Gets the Address into D-File Where to Plot or Unplot
 ; ----------------------------------------------------
 ;
 ; Input:
-;        B = Coordinate Y (line) to print (0-23)
+;        B = Coordinate Y (row) to print (0-23)
 ;        C = Coordinate X (column) to print (0-31)
 ; Output:
 ;        HL = Address into D-File to print
@@ -284,23 +282,23 @@ Plot:
 ;        DE
 ;------------------------------------------------------------------------------
 Calc_Plot_Address:
-    ld   a,b                 ; copia linha da impressao em A
-    rlca                     ; line * 2
-    rlca                     ; line * 4
-    rlca                     ; line * 8
+    ld   a,b                 ; Copies the row to the Accumulator
+    rlca                     ; row * 2
+    rlca                     ; row * 4
+    rlca                     ; row * 8
     ld   l,a
     ld   a,b
     add  a,c
-    ld   e,a
+    ld   e,a                 ; Copies column to DE
     ld   d,0
-    ld   h,d
-    add  hl,hl               ; line * 16
-    add  hl,hl               ; line * 32
-    add  hl,de               ; line * 33
+    ld   h,d                 ; Clears H
+    add  hl,hl               ; row * 16
+    add  hl,hl               ; row * 32
+    add  hl,de               ; row * 33
     ex   de,hl
     ld   hl,($400C)          ; Gets D-File address
     inc  hl                  ; Skips the 1st NEWLINE (CHR$ 118)
-    add  hl,de
+    add  hl,de               ;
     ret                      ; Returns with HL = printing address
 
 
@@ -309,33 +307,40 @@ Calc_Plot_Address:
 ; ------------------------------------------------
 ;
 ; Input  : None.
-; Output : HL = New valid LFSR.
+; Output : HL = A new valid LFSR value in a range of 1 to 3072.
+;
+; Some XOR Masks: (See more in https://users.ece.cmu.edu/~koopman/lfsr/12.txt)
+;     0829h
+;     0A1Bh
+;     0BB9h
+;
+; * NOTE: To get a 0-3071 value, to decrement HL before of use.
 ;------------------------------------------------------------------------------
 Gen_LFSR:
     ld    hl,(LFSR_Seed)     ; Gets the last LFSR value (Stored in the ZX81
                              ; System SEED variable)
-New_LFSR:
+Get_New_Value:
     srl   h
     rr    l
     jr    nc,Skip_XOR
 
-    ; Apply Tap of 12 bits (Maximum Period = 4095 states)
+    ; Apply Tap (0A1Bh) of 12 bits (Maximum Period = 4095 states)
     ld    a,h
-    xor   $08
+    xor   $0A
     ld    h,a
     ld    a,l
-    xor   $29
+    xor   $1B
     ld    l,a
 
 Skip_XOR:
-    ; Discards Values > 3072 (To decrement HL before of use, to get 0-3071)
-    ; 3072 in hexa is 0x0C00. If HL > 0x0C00, the pixel is out of screen.
-    ; Then calculates a new value.
+    ; Discards Values > 3072.
+    ; 3072 in hexadecimal is 0x0C00. If HL > 0x0C00, the pixel is out of
+    ; screen. Then calculates a new value.
     dec  hl                  ; Decrements HL temporarily for boundary test
     ld   a,h                 ; Loads A with the adjusted boundary for test
     inc  hl                  ; Restores original HL value
     cp   $0C                 ; Tests adjusted boundary (3072)
-    jr   nc,New_LFSR         ; LFSR Seed > 3072 (generate a new value)
+    jr   nc,Get_New_Value    ; LFSR Seed > 3072 (then generate a new value)
     ld   (LFSR_Seed),hl      ; Saves the new valid LFSR value...
     ret                      ; ...and exit
 
@@ -365,9 +370,9 @@ REM_Line_End:
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; 7 REM IN 05/SEP/2026 BY CJB
+; 7 REM IN 13/SEP/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Ch,21h,18h,38h,2Ah,35h,18h,1Eh
+    db  1Dh,1Fh,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
