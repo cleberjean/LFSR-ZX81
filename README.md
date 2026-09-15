@@ -7,4 +7,4 @@ Syntax to compilation: **tasm -80 -b lfsr2.asm lfsr2.p**
 
 For use under MIT license.
 
-Several LFSR masks reference in https://users.ece.cmu.edu/~koopman/lfsr/
+LFSR masks list file (12.TXT) acquired from https://users.ece.cmu.edu/~koopman/lfsr/ (see reference into 12.TXT file).
