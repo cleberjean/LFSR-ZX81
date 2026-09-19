@@ -7,4 +7,4 @@ Syntax for the version 3 compilation on DOS: **tasm -80 -b lfsr3.asm lfsr3.p**
 
 For use under MIT license.
 
-LFSR masks list file (12.TXT) acquired from https://users.ece.cmu.edu/~koopman/lfsr/ (see reference into 12.TXT file).
+LFSR masks list file (12.TXT) obtained from https://users.ece.cmu.edu/~koopman/lfsr/ (see reference into 12.TXT file).
