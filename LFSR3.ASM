@@ -1,5 +1,5 @@
 ;;=============================================================================
-;; Galois LFSR Screen Filling Version 3 (19sep2026)
+;; Galois LFSR Screen Filling Version 3 (20sep2026)
 ;;
 ;; Address 16417 (40FBh) signals the action (1 = Plot or 0 = Unplot)
 ;; Poking 128 (80h - bit 7 = 1), executes a Pause of 3 seconds.
@@ -150,12 +150,11 @@ Check_Scn_Full:
 ; Returns Z if the Space key was pressed.
 ;------------------------------------------------------------------------------
 Check_Space:    
-    ld   hl,($4025)          ; Gets the scancode of the last pressed key
-    ld   a,l                 ; Checks if any key was pressed
-    cp   $7F                 ; Scancode 1 for Space key
+    ld   a,($4025)           ; Gets the scancode 1 of the last pressed key
+    cp   $7F                 ; Checks scancode 1 for Space key
     ret  nz                  ; The Space key is not pressed (Z flag = 0)
-    ld   a,h
-    cp   $FD                 ; Scancode 2 for Space key (FCh for Shift+Space)
+    ld   a,($4026)           ; Gets the scancode 2 of the last pressed key
+    cp   $FD                 ; Checks scancode 2 for Space key (FCh for Shift+Space)
     ret                      ; Returns with the Space key status in Z flag 
                              ; (Z = 1 = The Space key was pressed)
 
@@ -257,11 +256,11 @@ Plot_Routine:
     ld   b,a
 
     ; Checks Action (Plot/Unplot?)
-    ; Address 4021h not is used by system. Then is used here as a flag
-    ; signaling to Plot (1) or Unplot (0) on screen.
+    ; Address 4021h not is used by system. Then his bit 0 is used here as
+    ; a flag, signaling to Plot (1) or Unplot (0) on screen.
     ld   a,(16417)           ; Gets action: Even = To Unplot, Odd = To Plot
-    and  1                   ; Test if Accumulator content is odd (To Plot)
-    jp   nz,Plot             ; Yes. Let's to plot
+    rra                      ; Gets Plot/Unplot flag (bit 0 of address 16417)
+    jr   c,Plot              ; Bit 0 = 1 = To Plot
 
     ; Unplots
     pop  af                  ; Restores the Unplot character
@@ -276,7 +275,6 @@ Plot:
     cp   8
     jr   c,$+4               ; To print the new char
     xor  $8F
-
     ld   (hl),a              ; Prints the Plot/Unplot on screen
     ret
 
@@ -382,9 +380,9 @@ REM_Line_End:
     db  00h,2Ch,2Ah,33h,2Ah,37h,26h,39h
     db  2Eh,34h,33h,76h
 
-; 7 REM IN 19/SEP/2026 BY CJB
+; 7 REM IN 20/SEP/2026 BY CJB
     db  00h,07h,17h,00h,0EAh,2Eh,33h,00h
-    db  1Dh,25h,18h,38h,2Ah,35h,18h,1Eh
+    db  1Eh,1Ch,18h,38h,2Ah,35h,18h,1Eh
     db  1Ch,1Eh,22h,00h,27h,3Eh,00h,28h
     db  2Fh,27h,76h
 
